@@ -45,9 +45,10 @@ class Centralized:
         #rewrite it with scalar product and quicksum
 
         objective = gp.LinExpr()
+        objective.add(lt_purchase * p_lt)
 
         for ind, proba in enumerate(probabilities):
-            objective.add(lt_purchase * p_lt + proba * (rt_purchase[ind] * p_rt))
+            objective.add(proba * (rt_purchase[ind] * p_rt))
 
         return objective
 
