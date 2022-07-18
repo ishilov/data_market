@@ -5,8 +5,7 @@ class Centralized:
     @staticmethod
     def lt_var(model, probabilities):
 
-        lt_purchase = model.addVars(len(probabilities),
-                        lb = 0,
+        lt_purchase = model.addVar(lb = 0,
                         ub = float('inf'),
                         vtype = gp.GRB.CONTINUOUS,
                         name = 'long term purchase')
@@ -48,7 +47,7 @@ class Centralized:
         objective = gp.LinExpr()
 
         for ind, proba in enumerate(probabilities):
-            objective.add(proba * (lt_purchase[ind] * p_lt + rt_purchase[ind] * p_rt))
+            objective.add(lt_purchase * p_lt + proba * (rt_purchase[ind] * p_rt))
 
         return objective
 
@@ -56,7 +55,7 @@ class Centralized:
     def balance_constraint(model, lt_purchase, rt_purchase, generation, demand):
         
         for ind, gen_value in enumerate(generation):
-            model.addConstr(lt_purchase[ind] + rt_purchase[ind] + gen_value >= demand)
+            model.addConstr(lt_purchase + rt_purchase[ind] + gen_value >= demand)
 
         model.update()
 
