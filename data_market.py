@@ -15,7 +15,7 @@ class Seller:
         return dist
 
     def _plot_forecast(self):
-        support = np.linspace(*self.forecast_rv.support(), 100)
+        support = np.linspace(*self.forecast_rv.support(), 1000)
 
         plt.plot(support, self.forecast_rv.pdf(support))
 
@@ -37,6 +37,8 @@ class MarketOperator:
 
     @staticmethod
     def scaler(sellers):
+        #Rewrite this whole functionality
+
         supp = np.sort(np.concatenate([np.linspace(*seller.forecast_rv.support(), 1000) for seller in sellers]))
 
         for seller in sellers:
@@ -49,6 +51,9 @@ class MarketOperator:
     @staticmethod
     def _plot_aggregation(sellers: list, agg_forecast):
         supp = np.sort(np.concatenate([np.linspace(*seller.forecast_rv.support(), 1000) for seller in sellers]))
+
+        if agg_forecast.support() == (0,1):
+            supp = np.linspace(0,1, 1000)
 
         plt.plot(supp, agg_forecast.pdf(supp));
 
@@ -86,6 +91,11 @@ class MarketOperator:
             rv = aggregated_rv()
             agg_data = rv.rvs(size=1000000)
             probas_res, values_res = np.histogram(agg_data, bins = 200, density=True)
+
+            #rewrite this scaling later
+            if scale:
+                values_res = (values_res - np.min(values_res)) / (np.max(values_res) - np.min(values_res))
+
             result_rv = stats.rv_histogram([probas_res, values_res])
             aggregated_forecast = result_rv
 
