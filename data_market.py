@@ -119,8 +119,38 @@ class MarketOperator:
 
 
     @staticmethod
-    def payoff(buyer, *sellers) -> np.array:
-        pass
+    def _skill_component(sellers: list, task):
+        list_skill_payoff = []
+        weigted_total_scoring = sum([seller.wager * MarketOperator.scoring(seller.forecast_rv, task)] for seller in sellers)
+        wager_sum = sum([seller.wager for seller in sellers])
+
+        for seller in sellers:
+            personal_score = MarketOperator.scoring(seller.forecast_rv, task)
+            payoff = seller.wager * (1 + personal_score - weigted_total_scoring / wager_sum)
+            list_skill_payoff.append(payoff)
+
+        return list_skill_payoff
+
+
+    @staticmethod
+    def _utililty_component(sellers:list, buyer, task):
+        list_utility_payoff = []
+        buyers_score = MarketOperator.scoring(buyer.base_forecast, task)
+        if buyer.utility > 0:
+            weigted_total_scoring = sum([seller.wager * MarketOperator.scoring(seller.forecast_rv, task)] for seller in sellers if MarketOperator.scoring(seller.forecast_rv, task) > buyers_score)
+            for seller in sellers:
+                personal_score = MarketOperator.scoring(seller.forecast_rv, task)
+                payoff = buyer.utility * (personal_score * seller.wager) / weigted_total_scoring if personal_score > buyers_score else 0
+                list_utility_payoff.append(payoff)
+
+        return list_utility_payoff
+
+    @staticmethod
+    def payoff(sellers: list, buyer, task) -> np.array:
+        list_skill_payoff = np.array(MarketOperator._skill_component(sellers, task))
+        list_utility_payoff = np.array(MarketOperator._utililty_component(sellers, buyer, task))
+
+        return list_skill_payoff + list_utility_payoff
 
 class Buyer:
     def __init__(self, base_forecast, utility) -> None:
