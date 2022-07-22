@@ -33,7 +33,13 @@ class MarketOperator:
         fig;
 
     @staticmethod
-    def aggregation(*sellers, type = 'QA') -> np.array:
+    def _plot_aggregation(*sellers, agg_forecast):
+        supp = np.sort(np.concatenate([np.linspace(*seller.distribution.support(), 1000) for seller in sellers]))
+
+        plt.plot(supp, agg_forecast(supp))
+
+    @staticmethod
+    def aggregation(*sellers, type = 'QA', plot = False) -> np.array:
         wager_sum = sum([seller.wager for seller in sellers])
 
         for seller in sellers:
@@ -41,8 +47,29 @@ class MarketOperator:
 
         if type == 'LOP':
             aggregated_forecast = lambda x: sum([seller.partial_wager * seller.distribution.pdf(x) for seller in sellers])
-
+    
         if type == 'QA':
+            aggregated_ppf = lambda x: sum([seller.partial_wager * seller.distribution.ppf(x) for seller in sellers])
+
+            class aggregated_rv(stats.rv_continuous):
+                def _ppf(self, x):
+                    return aggregated_ppf(x)
+
+            rv = aggregated_rv()
+
+            agg_data = rv.rvs(size=1000000)
+
+            probas_res, values_res, _ = plt.hist(agg_data, bins = 200)
+
+            result_rv = stats.rv_histogram([probas_res, values_res])
+
+            aggregated_forecast = result_rv.pdf
+
+        if plot:
+            MarketOperator._plot_aggregation(sellers, aggregated_forecast)
+
+        return aggregated_forecast
+
 
     @staticmethod
     def scoring(seller) -> float:
