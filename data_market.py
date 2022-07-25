@@ -1,4 +1,3 @@
-from functools import partial
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt 
@@ -46,7 +45,7 @@ class MarketOperator:
             task_cdf = MarketOperator._task_indicator(task, support)
             integrand = (forecast_rv.cdf(support) - task_cdf) ** 2
 
-            return np.trapz(integrand, x = support)
+            return 1 - np.trapz(integrand, x = support)
 
 class Market:
     '''Each instance of Market class is defined by the list of sellers, buyer and the task. 
@@ -189,12 +188,12 @@ class Market:
 
     def make_scoring(self):
         for id, seller in enumerate(self.sellers):
-            self.score_dict[f'Seller {id}'] = MarketOperator._scoring(self.scaled_dict[f'Seller #{id}'], self.scaled_task)
+            self.score_dict[f'Seller #{id}'] = MarketOperator._scoring(self.scaled_dict[f'Seller #{id}'], self.scaled_task)
             
 
     def _skill_component(self):
         list_skill_payoff = []
-        weigted_total_scoring = sum([seller.wager * self.score_dict[f'Seller #{id}']] for id, seller in enumerate(self.sellers))
+        weigted_total_scoring = sum([seller.wager * self.score_dict[f'Seller #{id}'] for id, seller in enumerate(self.sellers)])
         wager_sum = sum([seller.wager for seller in self.sellers])
 
         for id, seller in enumerate(self.sellers):
@@ -206,11 +205,16 @@ class Market:
 
     def _utililty_component(self):
         list_utility_payoff = []
-        buyers_score = MarketOperator._scoring(MarketOperator._scale_distribution(self.buyer.base_forecast), self.scaled_task)
+        buyers_score = MarketOperator._scoring(MarketOperator._scale_distribution(values = self.buyer.forecast[1], 
+                                                                                probabilities= self.buyer.forecast[0],
+                                                                                support= self.total_supp), self.scaled_task)
+
+        self.buyers_score = buyers_score
+        
         if self.buyer.utility > 0:
-            weigted_total_scoring = sum([seller.wager * self.score_dict[f'Seller #{id}']] for id, seller in enumerate(self.sellers)
-                                                                 if self.score_dict[f'Seller #{id}'] > buyers_score)
-            for seller in self.sellers:
+            weigted_total_scoring = sum([seller.wager * self.score_dict[f'Seller #{id}'] for id, seller in enumerate(self.sellers)
+                                                                 if self.score_dict[f'Seller #{id}'] > buyers_score])
+            for id, seller in enumerate(self.sellers):
                 personal_score = self.score_dict[f'Seller #{id}']
                 payoff = self.buyer.utility * (personal_score * seller.wager) / weigted_total_scoring if personal_score > buyers_score else 0
                 list_utility_payoff.append(payoff)
@@ -218,8 +222,11 @@ class Market:
         return list_utility_payoff
 
     def calculate_payoffs(self) -> np.array:
+        self.make_scoring()
         list_skill_payoff = np.array(self._skill_component())
+        print(list_skill_payoff)
         list_utility_payoff = np.array(self._utililty_component())
+        print(list_utility_payoff)
 
         return list_skill_payoff + list_utility_payoff
 
