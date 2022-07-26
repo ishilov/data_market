@@ -97,8 +97,15 @@ class Market:
         wager_sum = sum([seller.wager for seller in self.sellers]) 
         partial_wagers = [seller.wager / wager_sum for seller in self.sellers]
 
+        scaled_total_support = [np.linspace(*self.scaled_dict[f'Seller #{id}'].support(), 1000) for id, seller in enumerate(self.sellers)]
+        scaled_total_support.append(np.linspace(*MarketOperator._scale_distribution(values= self.buyer.forecast[1],
+                                                                    probabilities= self.buyer.forecast[0],
+                                                                    support= self.total_supp).support(), 1000))
+
+        scaled_total_support = np.sort(np.concatenate(scaled_total_support))
+
         if type == 'LOP':
-            aggregated_forecast_pdf = lambda x: sum([partial_wagers[id] * self.scaled_dict[f'Seller #{id}'].pdf(x) for id, seller in enumerate(self.sellers)])
+            aggregated_forecast_pdf = lambda x: sum([partial_wagers[id] * self.scaled_dict[f'Seller #{id}'].pdf(x) for id, seller in enumerate(self.sellers)])                                                      
 
             class aggregated_rv(stats.rv_continuous):
                 def _pdf(self, x):
@@ -109,7 +116,7 @@ class Market:
                     return np.trapz(self._pdf(support), x = support)
 
                 def _get_support(self):
-                    return 0, 1
+                    return scaled_total_support[0], scaled_total_support[-1]
 
             scaled_aggregated_forecast = aggregated_rv()
 
@@ -210,7 +217,7 @@ class Market:
                                                                                 support= self.total_supp), self.scaled_task)
 
         self.buyers_score = buyers_score
-        
+
         if self.buyer.utility > 0:
             weigted_total_scoring = sum([seller.wager * self.score_dict[f'Seller #{id}'] for id, seller in enumerate(self.sellers)
                                                                  if self.score_dict[f'Seller #{id}'] > buyers_score])
