@@ -38,15 +38,6 @@ class MarketOperator:
     def _task_indicator(task, support: np.array) -> np.array:
         return support >= task
 
-    @staticmethod
-    def _scoring(forecast_rv, task, type = 'CRPS') -> float:
-        if type == 'CRPS':
-            support = np.linspace(*forecast_rv.support(), 1000)
-            task_cdf = MarketOperator._task_indicator(task, support)
-            integrand = (forecast_rv.cdf(support) - task_cdf) ** 2
-
-            return 1 - np.trapz(integrand, x = support)
-
 class Market:
     '''Each instance of Market class is defined by the list of sellers, buyer and the task. 
     '''
@@ -111,7 +102,7 @@ class Market:
                 def _pdf(self, x):
                     return aggregated_forecast_pdf(x)
 
-                def _cdf(self, x):
+                def _cdf_single(self, x):
                     support = np.linspace(0, x, 1000)
                     return np.trapz(self._pdf(support), x = support)
 
@@ -157,7 +148,7 @@ class Market:
                 def _pdf(self, x):
                     return aggregated_forecast_pdf(x)
 
-                def _cdf(self, x):
+                def _cdf_single(self, x):
                     support = np.linspace(0, x, 1000)
                     return np.trapz(self._pdf(support), x = support)
 
@@ -193,9 +184,17 @@ class Market:
         self._scale_forecasts()
         self._scale_task()
 
+    def _scoring(self, forecast_rv, task, type = 'CRPS') -> float:
+        if type == 'CRPS':
+            support = np.linspace(-500, 500, 10000)
+            task_cdf = MarketOperator._task_indicator(task, support)
+            integrand = (forecast_rv.cdf(support) - task_cdf) ** 2
+
+            return 1 - np.trapz(integrand, x = support)
+
     def make_scoring(self):
         for id, seller in enumerate(self.sellers):
-            self.score_dict[f'Seller #{id}'] = MarketOperator._scoring(self.scaled_dict[f'Seller #{id}'], self.scaled_task)
+            self.score_dict[f'Seller #{id}'] = self._scoring(self.scaled_dict[f'Seller #{id}'], self.scaled_task)
             
 
     def _skill_component(self):
@@ -212,7 +211,7 @@ class Market:
 
     def _utililty_component(self):
         list_utility_payoff = []
-        buyers_score = MarketOperator._scoring(MarketOperator._scale_distribution(values = self.buyer.forecast[1], 
+        buyers_score = self._scoring(MarketOperator._scale_distribution(values = self.buyer.forecast[1], 
                                                                                 probabilities= self.buyer.forecast[0],
                                                                                 support= self.total_supp), self.scaled_task)
 
@@ -234,8 +233,6 @@ class Market:
         print(list_skill_payoff)
         list_utility_payoff = np.array(self._utililty_component())
         print(list_utility_payoff)
+        list_wagers = np.array([seller.wager for seller in self.sellers])
 
-        return list_skill_payoff + list_utility_payoff
-
-
-    
+        return list_skill_payoff + list_utility_payoff - list_wagers
