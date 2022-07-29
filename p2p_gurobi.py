@@ -17,7 +17,7 @@ class FirstStageModel:
     def da_sale(agent, model):
 
         model.addVar(lb = 0,
-                    ub = float('inf'),
+                    ub = 10, #float('inf'),
                     vtype = gp.GRB.CONTINUOUS,
                     name = f'Agent {agent.id} day-ahead sale')
 
@@ -39,7 +39,7 @@ class FirstStageModel:
 
         for proba, _ in enumerate(agent.probabilities):
             model.addVar(lb = 0,
-                        ub = float('inf'),
+                        ub = 10, #float('inf'),
                         vtype = gp.GRB.CONTINUOUS,
                         name = f'Agent {agent.id} proba {proba} real-time sale')
 
@@ -84,6 +84,19 @@ class FirstStageModel:
         return lExpr
 
     @staticmethod
+    def net_trading(agent,model):
+        model.addVar(lb = - float('inf'),
+                    ub = float('inf'),
+                    vtype = gp.GRB.CONTINUOUS,
+                    name = f'Agent {agent.id} net trading')
+
+        model.update()
+        
+    @staticmethod
+    def net_trading_constraint(agent, agents, model):
+        model.addConstr(model.getVarByName(f'Agent {agent.id} net trading') ==  FirstStageModel.trading_sum_calc(agent, agents, model, weights=False))
+
+    @staticmethod
     def balance_constraint(agent, agents, model):
 
         for proba, _ in enumerate(agent.probabilities):
@@ -93,7 +106,7 @@ class FirstStageModel:
                             + model.getVarByName(f'Agent {agent.id} day-ahead sale')
                             - model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase')
                             + model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale')
-                            - FirstStageModel.trading_sum_calc(agent, agents, model, weights=False) == 0,
+                            - model.getVarByName(f'Agent {agent.id} net trading') == 0,
                             name= f'SD balance for agent {agent.id} proba {proba}')
 
         model.update()
@@ -102,11 +115,11 @@ class FirstStageModel:
     def set_objective(agent, price_da_buy, price_da_sell, price_rt_buy, price_rt_sell, model):
         lExpr = gp.LinExpr()
 
-        for proba, _ in enumerate(agent.probabilities):
-            lExpr.add(model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase') * price_rt_buy
-                    - model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale') * price_rt_sell)
+        for proba, proba_val in enumerate(agent.probabilities):
+            lExpr.add(proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase') * price_rt_buy
+                    - proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale') * price_rt_sell)
 
-        lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase' * price_da_buy)
+        lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase') * price_da_buy
                 - model.getVarByName(f'Agent {agent.id} day-ahead sale') * price_da_sell)
 
         return lExpr
@@ -131,17 +144,23 @@ class FirstStageMarket:
             FirstStageModel.da_sale(agent, self.model)
             FirstStageModel.rt_purchase(agent, self.model)
             FirstStageModel.rt_sale(agent, self.model)
-
             FirstStageModel.energy_trading_var(agent, self.agents, self.model)
+            FirstStageModel.net_trading(agent, self.model)
+
+        for agent in self.agents:
+            FirstStageModel.net_trading_constraint(agent, self.agents, self.model)
             FirstStageModel.balance_constraint(agent, self.agents, self.model)
             FirstStageModel.bilateral_trading_constraint(agent, self.agents, self.model)
 
-            obj.add(FirstStageModel.set_objective(agent, self.price_da_buy, self.price_da_sell, self.price_rt_buy, self.price_rt_sell, self.model))
+        for agent in self.agents:
+            agent.objective = FirstStageModel.set_objective(agent, self.price_da_buy, self.price_da_sell, self.price_rt_buy, self.price_rt_sell, self.model)
+            obj.add(agent.objective)
 
         self.model.setObjective(obj, gp.GRB.MINIMIZE)
 
 class Agents:
-    def __init__(self, probabilities, generation_values, demand, connections, kappa) -> None:
+    def __init__(self, id, probabilities, generation_values, demand, connections, kappa) -> None:
+        self.id = id
         self.probabilities = probabilities
         self.generation = generation_values
         self.demand = demand
