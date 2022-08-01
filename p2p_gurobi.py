@@ -26,24 +26,26 @@ class FirstStageModel:
     @staticmethod
     def rt_purchase(agent, model):
 
-        for proba, _ in enumerate(agent.probabilities):
-            model.addVar(lb = 0,
-                        ub = float('inf'),
-                        vtype = gp.GRB.CONTINUOUS,
-                        name = f'Agent {agent.id} proba {proba} real-time purchase')
+        for proba, proba_val in enumerate(agent.probabilities):
+            if proba_val > 0:
+                model.addVar(lb = 0,
+                            ub = float('inf'),
+                            vtype = gp.GRB.CONTINUOUS,
+                            name = f'Agent {agent.id} proba {proba} real-time purchase')
 
         model.update()
 
     @staticmethod
     def rt_sale(agent, model):
 
-        for proba, _ in enumerate(agent.probabilities):
-            model.addVar(lb = 0,
-                        ub = 10, #float('inf'),
-                        vtype = gp.GRB.CONTINUOUS,
-                        name = f'Agent {agent.id} proba {proba} real-time sale')
+        for proba, proba_val in enumerate(agent.probabilities):
+            if proba_val >0:
+                model.addVar(lb = 0,
+                            ub = 10, #float('inf'),
+                            vtype = gp.GRB.CONTINUOUS,
+                            name = f'Agent {agent.id} proba {proba} real-time sale')
 
-        model.update()
+            model.update()
 
     @staticmethod
     def energy_trading_var(agent, agents, model):
@@ -94,20 +96,21 @@ class FirstStageModel:
         
     @staticmethod
     def net_trading_constraint(agent, agents, model):
-        model.addConstr(model.getVarByName(f'Agent {agent.id} net trading') ==  FirstStageModel.trading_sum_calc(agent, agents, model, weights=False))
+        model.addConstr(model.getVarByName(f'Agent {agent.id} net trading') ==  FirstStageModel.trading_sum_calc(agent, agents, model, weights=False), name = 'Net trading constraint')
 
     @staticmethod
     def balance_constraint(agent, agents, model):
 
-        for proba, _ in enumerate(agent.probabilities):
-            model.addConstr(agent.demand
-                            - agent.generation[proba]
-                            - model.getVarByName(f'Agent {agent.id} day-ahead purchase')
-                            + model.getVarByName(f'Agent {agent.id} day-ahead sale')
-                            - model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase')
-                            + model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale')
-                            - model.getVarByName(f'Agent {agent.id} net trading') == 0,
-                            name= f'SD balance for agent {agent.id} proba {proba}')
+        for proba, proba_val in enumerate(agent.probabilities):
+            if proba_val > 0:
+                model.addConstr(agent.demand
+                                - agent.generation[proba]
+                                - model.getVarByName(f'Agent {agent.id} day-ahead purchase')
+                                + model.getVarByName(f'Agent {agent.id} day-ahead sale')
+                                - model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase')
+                                + model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale')
+                                - model.getVarByName(f'Agent {agent.id} net trading') == 0,
+                                name= f'SD balance for agent {agent.id} proba {proba}')
 
         model.update()
 
@@ -116,13 +119,77 @@ class FirstStageModel:
         lExpr = gp.LinExpr()
 
         for proba, proba_val in enumerate(agent.probabilities):
-            lExpr.add(proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase') * price_rt_buy
-                    - proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale') * price_rt_sell)
+            if proba_val > 0:
+                lExpr.add(proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase') * price_rt_buy
+                        - proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale') * price_rt_sell)
 
         lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase') * price_da_buy
                 - model.getVarByName(f'Agent {agent.id} day-ahead sale') * price_da_sell)
 
         return lExpr
+
+
+class SecondStageModelDeterministic:
+    @staticmethod
+    def da_purchase(agent, model):
+
+        model.addVar(lb = 0,
+                    ub = float('inf'),
+                    vtype = gp.GRB.CONTINUOUS,
+                    name = f'Agent {agent.id} day-ahead purchase')
+
+        model.update()
+
+    @staticmethod
+    def da_sale(agent, model):
+
+        model.addVar(lb = 0,
+                    ub = 10, #float('inf'),
+                    vtype = gp.GRB.CONTINUOUS,
+                    name = f'Agent {agent.id} day-ahead sale')
+
+        model.update()
+
+    def da_purchase(agent, model):
+
+        model.addVar(lb = 0,
+                    ub = float('inf'),
+                    vtype = gp.GRB.CONTINUOUS,
+                    name = f'Agent {agent.id} real-time purchase')
+
+        model.update()
+
+    @staticmethod
+    def da_sale(agent, model):
+
+        model.addVar(lb = 0,
+                    ub = 10, #float('inf'),
+                    vtype = gp.GRB.CONTINUOUS,
+                    name = f'Agent {agent.id} real-time sale')
+
+        model.update()
+    
+    @staticmethod
+    def energy_trading_var(agent, agents, model):
+
+        for agent_2 in agents:
+            if agent.connections[agent_2.id]:
+                    model.addVar(lb = - agent.kappa[agent_2.id],
+                                ub = agent.kappa[agent_2.id],
+                                vtype = gp.GRB.CONTINUOUS,
+                                name = f'q_{agent.id}_{agent_2.id}')
+
+        model.update()
+
+    @staticmethod
+    def bilateral_trading_constraint(agent, agents, model):
+        for agent_2 in agents:
+            if agent.connections[agent_2.id]:
+                model.addConstr(model.getVarByName(f'q_{agent.id}_{agent_2.id}')  
+                                + model.getVarByName(f'q_{agent_2.id}_{agent.id}') == 0, 
+                                name = f'Bilateral trading for pair ({agent.id}, {agent_2.id})')
+
+        model.update()
 
 
 class FirstStageMarket:
