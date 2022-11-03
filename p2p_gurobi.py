@@ -39,7 +39,7 @@ class FirstStageModel:
     def rt_sale(agent, model):
 
         for proba, proba_val in enumerate(agent.probabilities):
-            if proba_val >0:
+            if proba_val > 0:
                 model.addVar(lb = 0,
                             ub = 10, #float('inf'),
                             vtype = gp.GRB.CONTINUOUS,
@@ -125,6 +125,8 @@ class FirstStageModel:
 
         lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase') * price_da_buy
                 - model.getVarByName(f'Agent {agent.id} day-ahead sale') * price_da_sell)
+
+        lExpr.add(model.getVarByName(f'Agent {agent.id} net trading') * (price_da_buy - 0.1))
 
         return lExpr
 
