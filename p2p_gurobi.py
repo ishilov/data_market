@@ -7,6 +7,7 @@ class FirstStageModel:
     def da_purchase(agent, model):
 
         model.addVar(lb = 0,
+                    #ub=0,
                     ub = float('inf'),
                     vtype = gp.GRB.CONTINUOUS,
                     name = f'Agent {agent.id} day-ahead purchase')
@@ -17,7 +18,8 @@ class FirstStageModel:
     def da_sale(agent, model):
 
         model.addVar(lb = 0,
-                    ub = 10, #float('inf'),
+                    #ub=0,
+                    ub = float('inf'),
                     vtype = gp.GRB.CONTINUOUS,
                     name = f'Agent {agent.id} day-ahead sale')
 
@@ -41,7 +43,7 @@ class FirstStageModel:
         for proba, proba_val in enumerate(agent.probabilities):
             if proba_val > 0:
                 model.addVar(lb = 0,
-                            ub = 10, #float('inf'),
+                            ub = float('inf'),
                             vtype = gp.GRB.CONTINUOUS,
                             name = f'Agent {agent.id} proba {proba} real-time sale')
 
@@ -104,7 +106,7 @@ class FirstStageModel:
         for proba, proba_val in enumerate(agent.probabilities):
             if proba_val > 0:
                 model.addConstr(agent.demand
-                                - agent.generation[proba]
+                                - agent.generation_values[proba]
                                 - model.getVarByName(f'Agent {agent.id} day-ahead purchase')
                                 + model.getVarByName(f'Agent {agent.id} day-ahead sale')
                                 - model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase')
@@ -115,7 +117,7 @@ class FirstStageModel:
         model.update()
 
     @staticmethod
-    def set_objective(agent, price_da_buy, price_da_sell, price_rt_buy, price_rt_sell, model):
+    def set_objective(agent, agents, price_da_buy, price_da_sell, price_rt_buy, price_rt_sell, model):
         lExpr = gp.LinExpr()
 
         for proba, proba_val in enumerate(agent.probabilities):
@@ -126,7 +128,8 @@ class FirstStageModel:
         lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase') * price_da_buy
                 - model.getVarByName(f'Agent {agent.id} day-ahead sale') * price_da_sell)
 
-        lExpr.add(model.getVarByName(f'Agent {agent.id} net trading') * (price_da_buy - 0.1))
+        #lExpr.add(model.getVarByName(f'Agent {agent.id} net trading') * (price_da_buy))
+        lExpr.add(FirstStageModel.trading_sum_calc(agent, agents, model, weights=True))
 
         return lExpr
 
@@ -146,7 +149,7 @@ class SecondStageModelDeterministic:
     def da_sale(agent, model):
 
         model.addVar(lb = 0,
-                    ub = 10, #float('inf'),
+                    ub = float('inf'),
                     vtype = gp.GRB.CONTINUOUS,
                     name = f'Agent {agent.id} day-ahead sale')
 
@@ -222,20 +225,21 @@ class FirstStageMarket:
             FirstStageModel.bilateral_trading_constraint(agent, self.agents, self.model)
 
         for agent in self.agents:
-            agent.objective = FirstStageModel.set_objective(agent, self.price_da_buy, self.price_da_sell, self.price_rt_buy, self.price_rt_sell, self.model)
+            agent.objective = FirstStageModel.set_objective(agent, self.agents, self.price_da_buy, self.price_da_sell, self.price_rt_buy, self.price_rt_sell, self.model)
             obj.add(agent.objective)
 
         self.model.setObjective(obj, gp.GRB.MINIMIZE)
 
 class Agents:
-    def __init__(self, id, probabilities, generation_values, demand, connections, kappa) -> None:
+    def __init__(self, id, probabilities, generation_values, demand, connections, kappa, trading_cost) -> None:
         self.id = id
         self.probabilities = probabilities
-        self.generation = generation_values
+        self.generation_values = generation_values
         self.demand = demand
         self.connections = connections
         self.kappa = np.ma.MaskedArray(kappa, 
                                     mask = np.logical_not(self.connections), 
                                     fill_value = 0).filled() 
+        self.trading_cost = trading_cost[self.id]
 
         

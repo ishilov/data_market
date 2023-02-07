@@ -227,12 +227,14 @@ class Market:
 
         return list_utility_payoff
 
-    def calculate_payoffs(self) -> np.array:
+    def calculate_payoffs(self, verbosity = 1) -> np.array:
         self.make_scoring()
         list_skill_payoff = np.array(self._skill_component())
-        print(list_skill_payoff)
+        if verbosity:
+            print(list_skill_payoff)
         list_utility_payoff = np.array(self._utililty_component())
-        print(list_utility_payoff)
+        if verbosity:
+            print(list_utility_payoff)
         list_wagers = np.array([seller.wager for seller in self.sellers])
 
         return list_skill_payoff + list_utility_payoff - list_wagers
