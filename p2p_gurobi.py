@@ -29,7 +29,7 @@ class FirstStageModel:
     def rt_purchase(agent, model):
 
         for proba, proba_val in enumerate(agent.probabilities):
-            if proba_val > 0:
+            if proba_val >= 0:
                 model.addVar(lb = 0,
                             ub = float('inf'),
                             vtype = gp.GRB.CONTINUOUS,
@@ -41,7 +41,7 @@ class FirstStageModel:
     def rt_sale(agent, model):
 
         for proba, proba_val in enumerate(agent.probabilities):
-            if proba_val > 0:
+            if proba_val >= 0:
                 model.addVar(lb = 0,
                             ub = float('inf'),
                             vtype = gp.GRB.CONTINUOUS,
@@ -78,7 +78,7 @@ class FirstStageModel:
         if weights:
             for agent_2 in agents:
                 if agent.connections[agent_2.id]:
-                    lExpr.add(model.getVarByName(f'q_{agent.id}_{agent_2.id}') * agent.trading_cost[agent_2.id])
+                    lExpr.add(model.getVarByName(f'q_{agent.id}_{agent_2.id}') * (agent.trading_cost[agent_2.id] - 0.01))
 
         else:
             for agent_2 in agents:
@@ -104,7 +104,7 @@ class FirstStageModel:
     def balance_constraint(agent, agents, model):
 
         for proba, proba_val in enumerate(agent.probabilities):
-            if proba_val > 0:
+            if proba_val >= 0:
                 model.addConstr(agent.demand
                                 - agent.generation_values[proba]
                                 - model.getVarByName(f'Agent {agent.id} day-ahead purchase')
@@ -121,14 +121,14 @@ class FirstStageModel:
         lExpr = gp.LinExpr()
 
         for proba, proba_val in enumerate(agent.probabilities):
-            if proba_val > 0:
+            if proba_val >= 0:
                 lExpr.add(proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time purchase') * price_rt_buy
                         - proba_val * model.getVarByName(f'Agent {agent.id} proba {proba} real-time sale') * price_rt_sell)
 
         lExpr.add(model.getVarByName(f'Agent {agent.id} day-ahead purchase') * price_da_buy
                 - model.getVarByName(f'Agent {agent.id} day-ahead sale') * price_da_sell)
 
-        #lExpr.add(model.getVarByName(f'Agent {agent.id} net trading') * (price_da_buy))
+        #lExpr.add(model.getVarByName(f'Agent {agent.id} net trading') * (price_da_buy - 0.01))
         lExpr.add(FirstStageModel.trading_sum_calc(agent, agents, model, weights=True))
 
         return lExpr
